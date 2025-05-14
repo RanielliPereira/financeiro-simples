@@ -34,6 +34,27 @@ CREATE TABLE IF NOT EXISTS transacoes (
 ''')
 conn.commit()
 
+def criar_tabela_salario_contas():
+    conexao = sqlite3.connect('financeiro.db')
+    cursor = conexao.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS salario_contas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            salario REAL,
+            aluguel REAL,
+            internet REAL,
+            agua REAL,
+            forca REAL,
+            carro REAL,
+            emprestimo REAL
+        )
+    ''')
+    conexao.commit()
+    conexao.close()
+
+    criar_tabela_salario_contas() 
+
+
 # Usuários fixos
 usuarios = {
     "ranielli": "2408",
@@ -51,10 +72,14 @@ def verificar_login():
         messagebox.showerror("Erro", "Usuário ou senha inválidos.")
 
 # --- Abrir tela principal ---
+def atualizar_pagina():
+    # Fecha a janela atual
+    tela_principal.destroy()
+    # Recria a interface chamando abrir_tela_principal novamente
+    abrir_tela_principal()
+
 def abrir_tela_principal():
-    global tela_principal
-    global lista_transacoes
-    global saldo_var
+    global tela_principal, lista_transacoes
 
     tela_principal = tk.Toplevel()
     tela_principal.title("Controle Financeiro")
@@ -71,21 +96,101 @@ def abrir_tela_principal():
     tk.Button(tela_principal, text="Gráfico Pizza", width=20, command=mostrar_grafico).grid(row=4, column=0, columnspan=2, pady=5)
     tk.Button(tela_principal, text="Visualizar PDF", width=20, command=visualizar_pdf).grid(row=6, column=0, pady=5)
     tk.Button(tela_principal, text="Compartilhar PDF", width=20, command=compartilhar_pdf).grid(row=6, column=1, pady=5)
-    tk.Button(tela_principal, text="Editar Selecionado", width=20, command=editar_transacao).grid(row=7, column=0, pady=5)
-
 
     lista_transacoes = tk.Listbox(tela_principal, width=50, height=15)
     lista_transacoes.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
 
-    tk.Button(tela_principal, text="Editar Selecionado", width=20, command=editar_transacao).grid(row=7, column=0, pady=5)
-    tk.Button(tela_principal, text="Excluir Selecionado", width=20, command=excluir_transacao).grid(row=7, column=1, pady=5)
+    tk.Button(tela_principal, text="Editar Selecionado", width=20, command=editar_transacao,bg="yellow", fg="black").grid(row=7, column=0, pady=5)
+    tk.Button(tela_principal, text="Excluir Selecionado", width=20, command=excluir_transacao,bg="red", fg="white").grid(row=7, column=1, pady=5)
+    tk.Button(tela_principal, text="Salário e Contas Fixas", width=20, command=tela_salario_contas).grid(row=8, column=0, columnspan=2, pady=5)
+    tk.Button(tela_principal, text="Ver Gastos Fixos", command=ver_gastos_fixos).grid(row=8, column=1, columnspan=2, pady=5)
 
-    def excluir_transacao():
-        selecionado = lista_transacoes.curselection()
-        if not selecionado:
-            messagebox.showwarning("Aviso", "Selecione uma transação para excluir.")
+
+
+    # Botão para atualizar a página
+    tk.Button(tela_principal, text="Atualizar Página", width=20, command=atualizar_pagina,bg="blue", fg="white").grid(row=8, column=0, columnspan=2, pady=5)
+
+def tela_salario_contas():
+    janela = tk.Toplevel()
+    janela.title("Salário e Contas Fixas")
+
+    tk.Label(janela, text="Salário:").pack()
+    entrada_salario = tk.Entry(janela)
+    entrada_salario.pack()
+
+    campos = ["Aluguel", "Internet", "Água", "Força", "Carro", "Empréstimo"]
+    entradas = {}
+
+    for campo in campos:
+        tk.Label(janela, text=f"{campo}:").pack()
+        entradas[campo] = tk.Entry(janela)
+        entradas[campo].pack()
+
+    def salvar_dados():
+        try:
+            salario = float(entrada_salario.get() or 0)
+            dados = [float(entradas[campo].get() or 0) for campo in campos]
+
+            conexao = sqlite3.connect('financeiro.db')
+            cursor = conexao.cursor()
+
+            cursor.execute("DELETE FROM salario_contas")  # Limpa
+            cursor.execute('''
+                INSERT INTO salario_contas (salario, aluguel, internet, agua, forca, carro, emprestimo)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (salario, *dados))
+            conexao.commit()
+            conexao.close()
+            messagebox.showinfo("Sucesso", "Dados salvos com sucesso!")
+            janela.destroy()
+        except ValueError:
+            messagebox.showerror("Erro", "Digite valores válidos.")
+
+    tk.Button(janela, text="Salvar", command=salvar_dados).pack(pady=10)
+    tk.Button(janela, text="Fechar", command=janela.destroy).pack()
+
+
+def ver_gastos_fixos():
+    conexao = sqlite3.connect('financeiro.db')
+    cursor = conexao.cursor()
+
+    cursor.execute("SELECT salario, aluguel, internet, agua, forca, carro, emprestimo FROM salario_contas")
+    dados = cursor.fetchone()
+    conexao.close()
+
+    janela_gastos = tk.Toplevel()
+    janela_gastos.title("Gastos Fixos")
+
+    if dados:
+        campos = ["Salário", "Aluguel", "Internet", "Água", "Força", "Carro", "Empréstimo"]
+        for i, campo in enumerate(campos):
+            tk.Label(janela_gastos, text=f"{campo}: R$ {dados[i]:.2f}", font=("Arial", 12)).pack(pady=2)
+    else:
+        tk.Label(janela_gastos, text="Nenhum dado de salário ou contas fixas cadastrado.", font=("Arial", 12)).pack(pady=10)
+
+
+
+def excluir_transacao():
+    selecionado = lista_transacoes.curselection()
+    if not selecionado:
+        messagebox.showwarning("Aviso", "Selecione uma transação para excluir.")
         return
+    indice = selecionado[0]
+    lista_transacoes.delete(indice)
+    messagebox.showinfo("Sucesso", "Transação excluída.")
 
+def editar_transacao():
+    selecionado = lista_transacoes.curselection()
+    if not selecionado:
+        messagebox.showwarning("Aviso", "Selecione uma transação para editar.")
+        return
+    indice = selecionado[0]
+    texto = lista_transacoes.get(indice)
+    print("Editando:", texto)
+    # lógica de edição aqui
+
+
+    selecionado = lista_transacoes.curselection()
     texto = lista_transacoes.get(selecionado)
     tipo = texto.split(']')[0].strip('[').lower()
     categoria = texto.split(']')[1].split('-')[0].strip()
