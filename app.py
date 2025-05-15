@@ -54,6 +54,20 @@ def criar_tabela_salario_contas():
 
     criar_tabela_salario_contas() 
 
+    def criar_tabela_usuarios():
+        conexao = sqlite3.connect("financeiro.db")
+        cursor = conexao.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            usuario TEXT PRIMARY KEY,
+            senha TEXT NOT NULL
+        )
+    """)
+    conexao.commit()
+    conexao.close()
+
+    criar_tabela_usuarios
+
 
 # Usuários fixos
 usuarios = {
@@ -61,15 +75,65 @@ usuarios = {
     "ana": "2408"
 }
 
+
 # --- Tela de login ---
 def verificar_login():
     usuario = usuario_entry.get()
     senha = senha_entry.get()
-    if usuarios.get(usuario) == senha:
+
+    conexao = sqlite3.connect("financeiro.db")
+    cursor = conexao.cursor()
+    cursor.execute("SELECT * FROM usuarios WHERE usuario = ? AND senha = ?", (usuario, senha))
+    resultado = cursor.fetchone()
+    conexao.close()
+
+    if resultado:
+        messagebox.showinfo("Login", "Login realizado com sucesso!")
         login_janela.destroy()
         abrir_tela_principal()
     else:
         messagebox.showerror("Erro", "Usuário ou senha inválidos.")
+  
+
+def abrir_tela_cadastro():
+    cadastro_janela = tk.Toplevel()
+    cadastro_janela.title("Cadastro de Usuário")
+
+    
+    tk.Label(cadastro_janela, text="Novo Usuário:", font=("Arial", 12)).pack(pady=5)
+    novo_usuario_entry = tk.Entry(cadastro_janela, font=("Arial", 12))
+    novo_usuario_entry.pack(pady=5)
+
+    tk.Label(cadastro_janela, text="Nova Senha:", font=("Arial", 12)).pack(pady=5)
+    nova_senha_entry = tk.Entry(cadastro_janela, show="*", font=("Arial", 12))
+    nova_senha_entry.pack(pady=5)
+
+    def salvar_novo_usuario():
+        novo_usuario = novo_usuario_entry.get().strip()
+        nova_senha = nova_senha_entry.get().strip()
+
+        if novo_usuario == "" or nova_senha == "":
+            messagebox.showerror("Erro", "Preencha todos os campos.")
+            return
+
+        conexao = sqlite3.connect("financeiro.db")
+        cursor = conexao.cursor()
+        cursor.execute("SELECT * FROM usuarios WHERE usuario = ?", (novo_usuario,))
+        if cursor.fetchone():
+            messagebox.showerror("Erro", "Usuário já existe.")
+            conexao.close()
+        else:
+            cursor.execute("INSERT INTO usuarios (usuario, senha) VALUES (?, ?)", (novo_usuario, nova_senha))
+            conexao.commit()
+            conexao.close()
+            messagebox.showinfo("Sucesso", "Cadastro realizado com sucesso!")
+            cadastro_janela.destroy()
+
+    # Botões (devem estar fora da função salvar_novo_usuario)
+    tk.Button(cadastro_janela, text="Salvar", command=salvar_novo_usuario, font=("Arial", 12), bg="green", fg="white").pack(pady=10)
+    tk.Button(cadastro_janela, text="Cancelar", command=cadastro_janela.destroy, font=("Arial", 12)).pack()
+
+
 
 # --- Abrir tela principal ---
 def atualizar_pagina():
@@ -102,13 +166,13 @@ def abrir_tela_principal():
 
     tk.Button(tela_principal, text="Editar Selecionado", width=20, command=editar_transacao,bg="yellow", fg="black").grid(row=7, column=0, pady=5)
     tk.Button(tela_principal, text="Excluir Selecionado", width=20, command=excluir_transacao,bg="red", fg="white").grid(row=7, column=1, pady=5)
-    tk.Button(tela_principal, text="Salário e Contas Fixas", width=20, command=tela_salario_contas).grid(row=8, column=0, columnspan=2, pady=5)
+    tk.Button(tela_principal, text="Salário e Contas Fixas", width=20, command=tela_salario_contas).grid(row=8, column=0, pady=5)
     tk.Button(tela_principal, text="Ver Gastos Fixos", command=ver_gastos_fixos).grid(row=8, column=1, columnspan=2, pady=5)
 
 
 
     # Botão para atualizar a página
-    tk.Button(tela_principal, text="Atualizar Página", width=20, command=atualizar_pagina,bg="blue", fg="white").grid(row=8, column=0, columnspan=2, pady=5)
+    tk.Button(tela_principal, text="Atualizar Página", width=20, command=atualizar_pagina,bg="blue", fg="white").grid(row=9, column=0, columnspan=2, pady=5)
 
 def tela_salario_contas():
     janela = tk.Toplevel()
@@ -154,7 +218,7 @@ def ver_gastos_fixos():
     conexao = sqlite3.connect('financeiro.db')
     cursor = conexao.cursor()
 
-    cursor.execute("SELECT salario, aluguel, internet, agua, forca, carro, emprestimo FROM salario_contas")
+    cursor.execute("SELECT aluguel, internet, agua, forca, carro, emprestimo FROM salario_contas")
     dados = cursor.fetchone()
     conexao.close()
 
@@ -162,7 +226,7 @@ def ver_gastos_fixos():
     janela_gastos.title("Gastos Fixos")
 
     if dados:
-        campos = ["Salário", "Aluguel", "Internet", "Água", "Força", "Carro", "Empréstimo"]
+        campos = ["Aluguel", "Internet", "Água", "Força", "Carro", "Empréstimo"]
         for i, campo in enumerate(campos):
             tk.Label(janela_gastos, text=f"{campo}: R$ {dados[i]:.2f}", font=("Arial", 12)).pack(pady=2)
     else:
@@ -449,19 +513,26 @@ def mostrar_grafico():
     plt.show()
 
 # --- Função principal ---
-if __name__ == "__main__":
-    # Tela de Login
+def abrir_tela_login():
+    global login_janela, usuario_entry, senha_entry
+
     login_janela = tk.Tk()
     login_janela.title("Login")
 
-    tk.Label(login_janela, text="Usuário:").grid(row=0, column=0, padx=10, pady=10)
-    usuario_entry = tk.Entry(login_janela)
-    usuario_entry.grid(row=0, column=1, padx=10, pady=10)
+    tk.Label(login_janela, text="Usuário:", font=("Arial", 12)).pack(pady=5)
+    usuario_entry = tk.Entry(login_janela, font=("Arial", 12))
+    usuario_entry.pack(pady=5)
 
-    tk.Label(login_janela, text="Senha:").grid(row=1, column=0, padx=10, pady=10)
-    senha_entry = tk.Entry(login_janela, show="*")
-    senha_entry.grid(row=1, column=1, padx=10, pady=10)
+    tk.Label(login_janela, text="Senha:", font=("Arial", 12)).pack(pady=5)
+    senha_entry = tk.Entry(login_janela, show="*", font=("Arial", 12))
+    senha_entry.pack(pady=5)
 
-    tk.Button(login_janela, text="Entrar", command=verificar_login).grid(row=2, column=0, columnspan=2, pady=10)
+    tk.Button(login_janela, text="Entrar", command=verificar_login, font=("Arial", 12)).pack(pady=10)
+    tk.Button(login_janela, text="Cadastrar", command=abrir_tela_cadastro, font=("Arial", 12)).pack()
 
     login_janela.mainloop()
+
+# --- Execução ---
+if __name__ == "__main__":
+    criar_tabela_usuarios()
+    abrir_tela_login()
