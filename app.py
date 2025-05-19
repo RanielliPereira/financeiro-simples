@@ -69,12 +69,6 @@ def criar_tabela_salario_contas():
     criar_tabela_usuarios
 
 
-# Usuários fixos
-usuarios = {
-    "ranielli": "2408",
-    "ana": "2408"
-}
-
 
 # --- Tela de login ---
 def verificar_login():
@@ -145,6 +139,9 @@ def atualizar_pagina():
 def abrir_tela_principal():
     global tela_principal, lista_transacoes
 
+    verificar_notificacoes()
+    checar_salario_e_contas()
+
     tela_principal = tk.Toplevel()
     tela_principal.title("Controle Financeiro")
 
@@ -173,6 +170,67 @@ def abrir_tela_principal():
 
     # Botão para atualizar a página
     tk.Button(tela_principal, text="Atualizar Página", width=20, command=atualizar_pagina,bg="blue", fg="white").grid(row=9, column=0, columnspan=2, pady=5)
+
+def verificar_notificacoes():
+    conexao = sqlite3.connect('financeiro.db')
+    cursor = conexao.cursor()
+    
+    cursor.execute("SELECT salario, aluguel, internet, agua, forca, carro, emprestimo FROM salario_contas")
+    dados = cursor.fetchone()
+    
+    if dados:
+        salario = dados[0]
+        contas_fixas = dados[1:]
+        
+        # Notificar se salário registrado
+        if salario and salario > 0:
+            messagebox.showinfo("Notificação", f"Salário de R$ {salario:.2f} caiu na conta!")
+        
+        # Verificar se contas fixas precisam ser pagas - Exemplo: nos primeiros 5 dias do mês
+        dia_atual = datetime.now().day
+        if 1 <= dia_atual <= 5:
+            msg = "As contas fixas precisam ser pagas:\n"
+            nomes_contas = ["Aluguel", "Internet", "Água", "Força", "Carro", "Empréstimo"]
+            for nome, valor in zip(nomes_contas, contas_fixas):
+                if valor and valor > 0:
+                    msg += f"- {nome}: R$ {valor:.2f}\n"
+            messagebox.showinfo("Aviso", msg)
+    conexao.close()
+
+def checar_salario_e_contas():
+    conexao = sqlite3.connect('financeiro.db')
+    cursor = conexao.cursor()
+    
+    # Verifica se salário foi registrado hoje (ou recentemente)
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    cursor.execute("SELECT salario FROM salario_contas")
+    resultado_salario = cursor.fetchone()
+    
+    cursor.execute("SELECT data FROM transacoes WHERE tipo = 'entrada' ORDER BY data DESC LIMIT 1")
+    ultima_entrada = cursor.fetchone()
+    
+    # Verifica se existem contas fixas cadastradas
+    cursor.execute("SELECT aluguel, internet, agua, forca, carro, emprestimo FROM salario_contas")
+    contas = cursor.fetchone()
+    
+    conexao.close()
+
+    notificacoes = []
+
+    if resultado_salario and resultado_salario[0] > 0:
+        # Se a última entrada for hoje ou data muito próxima, considera salário recebido hoje
+        if ultima_entrada:
+            data_entrada = ultima_entrada[0][:10]  # pega só a data (YYYY-MM-DD)
+            if data_entrada == hoje:
+                notificacoes.append("Seu salário foi depositado hoje!")
+
+    if contas and any(valor > 0 for valor in contas):
+        notificacoes.append("Não esqueça de pagar suas contas fixas!")
+
+    if notificacoes:
+        messagebox.showinfo("Notificações", "\n".join(notificacoes))
+
+
 
 def tela_salario_contas():
     janela = tk.Toplevel()
@@ -336,7 +394,7 @@ def atualizar_lista():
             lista_transacoes.insert(tk.END, f"[{tipo.upper()}] {cat} - R$ {val:.2f} em {dt}")
             lista_transacoes.itemconfig(tk.END, {'fg': 'blue'})  # Reserva em azul
             total -= val
-    saldo_var.set(f"Saldo: R$ {total:.2f}")
+saldo_var.set(f"Saldo: R$ {total:.2f}")
 
 # --- Telas de entrada, saída e reserva ---
 def abrir_tela_entrada():
@@ -518,21 +576,20 @@ def abrir_tela_login():
 
     login_janela = tk.Tk()
     login_janela.title("Login")
+    
+    tk.Label(login_janela, text="Usuário:").grid(row=0, column=0, padx=10, pady=10)
+    usuario_entry = tk.Entry(login_janela)
+    usuario_entry.grid(row=0, column=1, padx=10, pady=10)
 
-    tk.Label(login_janela, text="Usuário:", font=("Arial", 12)).pack(pady=5)
-    usuario_entry = tk.Entry(login_janela, font=("Arial", 12))
-    usuario_entry.pack(pady=5)
-
-    tk.Label(login_janela, text="Senha:", font=("Arial", 12)).pack(pady=5)
-    senha_entry = tk.Entry(login_janela, show="*", font=("Arial", 12))
-    senha_entry.pack(pady=5)
-
-    tk.Button(login_janela, text="Entrar", command=verificar_login, font=("Arial", 12)).pack(pady=10)
-    tk.Button(login_janela, text="Cadastrar", command=abrir_tela_cadastro, font=("Arial", 12)).pack()
+    tk.Label(login_janela, text="Senha:").grid(row=1, column=0, padx=10, pady=10)
+    senha_entry = tk.Entry(login_janela, show="*")
+    senha_entry.grid(row=1, column=1, padx=10, pady=10)
+    tk.Button(login_janela, text="Entrar", command=verificar_login).grid(row=2, column=0, columnspan=1, pady=10)
+    tk.Button(login_janela, text="Cadastrar", command=abrir_tela_cadastro,).grid(row=2, column=1, columnspan=3, pady=10)
 
     login_janela.mainloop()
 
 # --- Execução ---
 if __name__ == "__main__":
-    criar_tabela_usuarios()
+    
     abrir_tela_login()
